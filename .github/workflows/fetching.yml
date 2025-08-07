@@ -1,0 +1,31 @@
+name: Run Scraper
+
+on:
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+  schedule:
+    - cron: '0 2 * * *'  # runs daily at 2 AM UTC (adjust as needed)
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'  # or any version you need
+
+      - name: Set up virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run updated_scraper.py
+        run: |
+          source venv/bin/activate
+          python updated_exam_scraper.py
