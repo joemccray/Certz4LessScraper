@@ -1,0 +1,44 @@
+# exam_scraper_v9.1 Configuration File
+# This file centralizes runtime parameters for easy tuning.
+
+# --- Network & Concurrency Settings ---
+# Maximum number of concurrent async network requests.
+# A higher number increases speed but also the risk of being rate-limited.
+max_concurrent_requests: 1
+# Maximum number of parallel CPU-bound processes for OCR.
+# Should ideally match the number of CPU cores on the machine.
+max_cpu_workers: 4
+# Default timeout in seconds for a single network request to ScrapingBee.
+request_timeout: 90
+
+# --- Task & Retry Settings ---
+# Maximum number of retries for a failed network request or DB operation.
+max_retries: 5
+# Timeout in seconds for a single scraping task (a full HTML crawl or PDF parse).
+# Prevents deadlocks from hung tasks.
+task_timeout_seconds: 300
+
+# --- OCR Settings ---
+# Minimum average confidence score (0-100) for an OCR'd page to be accepted.
+# Helps prevent ingestion of "garbage" text from poor-quality scans.
+min_ocr_confidence: 65
+# Heuristic: minimum text length from native extraction before triggering OCR.
+min_text_length_for_native_pdf: 500
+
+# --- CSS Selectors ---
+# Centralizing selectors makes the scraper resilient to minor website layout changes.
+selectors:
+  itexams:
+    question_container: ".examsPage__question"
+    question_body: ".examsPage__question-body > span"
+    correct_answer: ".examsPage__question-correct-answer strong"
+    answer_option: ".examsPage__question-answer"
+    next_page_link: "a.next[href]"
+  allfreedumps:
+    pdf_download_link: "div.downbtn a[href*='downloadfile.html']"
+    exam_link: "ul.row > li > a[href$='-dumps.html']"
+
+# --- Webhook URLs (optional) ---
+# For failure notifications and run summaries.
+slack_webhook_url: ""
+discord_webhook_url: ""

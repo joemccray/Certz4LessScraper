@@ -1,0 +1,32 @@
+# Core Dependencies
+# These packages form the backbone of the application, handling database connections, environment variables, API clients, and data validation.
+supabase
+psycopg2-binary
+python-dotenv
+google-search-results
+PyYAML
+pydantic
+
+# Web Scraping & HTTP
+# Libraries for making asynchronous HTTP requests and parsing HTML content.
+httpx[http2]
+beautifulsoup4
+tenacity
+
+# PDF & Image Processing (OCR)
+# Essential for handling PDF files, both for text extraction and for converting image-based pages to text via Optical Character Recognition.
+PyMuPDF
+Pillow
+pytesseract
+
+# Natural Language Processing (NLP)
+# Used for advanced data enrichment, such as language detection or suggesting tags based on question content.
+spacy
+langdetect
+
+# After installing, a language model is needed. For example: python -m spacy download en_core_web_sm
+
+# Development & Testing
+# Tools to ensure code quality, run automated tests, and enforce static typing.
+pytest
+mypy

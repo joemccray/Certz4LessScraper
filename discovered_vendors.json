@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Amazon",
+    "url": "https://www.itexams.com/vendor/Amazon"
+  },
+  {
+    "name": "Cisco",
+    "url": "https://www.itexams.com/vendor/Cisco"
+  },
+  {
+    "name": "CompTIA",
+    "url": "https://www.itexams.com/vendor/CompTIA"
+  },
+  {
+    "name": "Databricks",
+    "url": "https://www.itexams.com/vendor/Databricks"
+  },
+  {
+    "name": "ECCouncil",
+    "url": "https://www.itexams.com/vendor/ECCouncil"
+  },
+  {
+    "name": "Fortinet",
+    "url": "https://www.itexams.com/vendor/Fortinet"
+  },
+  {
+    "name": "Google",
+    "url": "https://www.itexams.com/vendor/Google"
+  },
+  {
+    "name": "Isaca",
+    "url": "https://www.itexams.com/vendor/Isaca"
+  },
+  {
+    "name": "ISC",
+    "url": "https://www.itexams.com/vendor/ISC"
+  },
+  {
+    "name": "Microsoft",
+    "url": "https://www.itexams.com/vendor/Microsoft"
+  },
+  {
+    "name": "Palo Alto Networks",
+    "url": "https://www.itexams.com/vendor/Palo%20Alto%20Networks"
+  },
+  {
+    "name": "PMI",
+    "url": "https://www.itexams.com/vendor/PMI"
+  },
+  {
+    "name": "Salesforce",
+    "url": "https://www.itexams.com/vendor/Salesforce"
+  },
+  {
+    "name": "ServiceNow",
+    "url": "https://www.itexams.com/vendor/ServiceNow"
+  },
+  {
+    "name": "VMware",
+    "url": "https://www.itexams.com/vendor/VMware"
+  }
+]
