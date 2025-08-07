@@ -3,7 +3,7 @@ name: Run Scraper
 on:
   workflow_dispatch:  # allows manual trigger from GitHub UI
   schedule:
-    - cron: '50 11 * * *'  # runs daily at 2 AM UTC (adjust as needed)
+    - cron: '54 11 * * *'  # runs daily at 2 AM UTC (adjust as needed)
 
 jobs:
   scrape:
@@ -25,7 +25,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run updated_scraper.py
+      - name: Run updated_exam_scraper.py
         run: |
           source venv/bin/activate
           python updated_exam_scraper.py
