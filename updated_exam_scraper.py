@@ -30,6 +30,7 @@ from typing import List, Dict, Any
 
 from dotenv import load_dotenv
 from pydantic import ValidationError
+load_dotenv()
 
 # --- Modular Imports ---
 from vendors import WORKER_MAP, DISCOVERY_MAP
@@ -46,7 +47,7 @@ checkpoint = {"processed_tasks": {}}
 db_retry_queue = []
 main_logger = logging.getLogger("main")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgres://postgres:admin@localhost:5432/QuestionsScrapper")
+DATABASE_URL = os.getenv("DATABASE_URL")
 db_connection = None
 
 # ---------------------------
@@ -56,6 +57,7 @@ def get_db_connection():
     global db_connection
     if db_connection is None or db_connection.closed:
         try:
+            main_logger.info(f'===== the database url is {DATABASE_URL} =====')
             db_connection = psycopg2.connect(DATABASE_URL)
             db_connection.autocommit = True
             main_logger.info("✅ Connected to Postgres database successfully.")
@@ -71,18 +73,37 @@ def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Create questions table
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mcqs (
+        CREATE TABLE IF NOT EXISTS questions (
             question_id TEXT PRIMARY KEY,
-            question TEXT NOT NULL,
-            options TEXT[],
-            answer TEXT,
-            source TEXT
+            vendor TEXT NOT NULL,
+            exam_code TEXT NOT NULL,
+            exam_name TEXT NOT NULL,
+            question_text TEXT NOT NULL,
+            explanation TEXT,
+            tags TEXT[],
+            source_url TEXT,
+            source_type TEXT,
+            version TEXT
         );
         """)
+
+        # Create answers table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS answers (
+            id SERIAL PRIMARY KEY,
+            question_id TEXT REFERENCES questions(question_id) ON DELETE CASCADE,
+            option TEXT NOT NULL,
+            text TEXT NOT NULL,
+            is_correct BOOLEAN DEFAULT FALSE
+        );
+        """)
+
         conn.commit()
         cursor.close()
-        main_logger.info("✅ Table 'mcqs' is ready in the database.")
+        main_logger.info("✅ Tables 'questions' and 'answers' are ready in the database.")
     except Exception as e:
         main_logger.critical(f"❌ Failed to initialize DB table: {e}")
         sys.exit(1)
@@ -94,54 +115,81 @@ async def validate_and_upsert_batch(records: List[Dict]):
     if not records:
         return 0
 
-    valid_records = []
+    valid_questions = []
+    valid_answers = []
     validation_errors = []
+
     for rec in records:
         try:
-            Question(**rec)
-            # Convert answers to a format suitable for database storage
-            answers_text = []
-            correct_answer = ""
-            for answer in rec.get('answers', []):
-                answer_text = f"{answer.get('option', '')}. {answer.get('text', '')}"
-                answers_text.append(answer_text)
-                if answer.get('is_correct', False):
-                    correct_answer = answer.get('option', '')
-            
-            valid_records.append((
-                rec.get('question_id'),
-                rec.get('question_text'),
-                answers_text,
-                correct_answer,
-                rec.get('source_url')
+            q = Question(**rec)
+
+            # Prepare question record
+            valid_questions.append((
+                q.question_id,
+                q.vendor,
+                q.exam_code,
+                q.exam_name,
+                q.question_text,
+                q.explanation,
+                q.tags,
+                q.source_url,
+                q.source_type,
+                q.version
             ))
+
+            # Prepare associated answers
+            for ans in q.answers:
+                valid_answers.append((
+                    q.question_id,
+                    ans.option,
+                    ans.text,
+                    ans.is_correct
+                ))
+
         except ValidationError as e:
-            validation_errors.append({"record_id": rec.get('question_id'), "error": e.errors()})
+            validation_errors.append({
+                "record_id": rec.get("question_id"),
+                "error": e.errors()
+            })
 
     if validation_errors:
         main_logger.warning(f"{len(validation_errors)} records failed validation.")
 
-    if not valid_records:
+    if not valid_questions:
         return 0
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        insert_query = """
-            INSERT INTO mcqs (question_id, question, options, answer, source)
-            VALUES %s
+
+        # Insert into questions table
+        insert_questions_query = """
+            INSERT INTO questions (
+                question_id, vendor, exam_code, exam_name, question_text,
+                explanation, tags, source_url, source_type, version
+            ) VALUES %s
             ON CONFLICT (question_id) DO NOTHING
         """
-        execute_values(cursor, insert_query, valid_records)
+        execute_values(cursor, insert_questions_query, valid_questions)
+
+        # Insert into answers table (skip if no answers)
+        if valid_answers:
+            insert_answers_query = """
+                INSERT INTO answers (question_id, option, text, is_correct)
+                VALUES %s
+            """
+            execute_values(cursor, insert_answers_query, valid_answers)
+
         cursor.close()
 
-        main_logger.info(f"[DB-ENTRY] ✅ Inserted {len(valid_records)} MCQs into Postgres.")
-        return len(valid_records)
+        main_logger.info(f"[DB-ENTRY] ✅ Inserted {len(valid_questions)} questions and {len(valid_answers)} answers.")
+        return len(valid_questions)
 
     except Exception as e:
-        main_logger.error(f"❌ Failed inserting MCQs batch: {e}")
-        db_retry_queue.extend(valid_records)
+        main_logger.error(f"❌ Failed inserting batch into Postgres: {e}")
+        db_retry_queue.extend(valid_questions)
         return 0
+
 
 # ---------------------------
 # Load Config
