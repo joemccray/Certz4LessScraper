@@ -100,6 +100,18 @@ def init_db():
             is_correct BOOLEAN DEFAULT FALSE
         );
         """)
+        
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_questions_vendor ON questions(vendor);
+        """)
+
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_questions_exam_code ON questions(exam_code);
+        """)
+
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
+        """)
 
         conn.commit()
         cursor.close()

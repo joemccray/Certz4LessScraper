@@ -30,3 +30,7 @@ langdetect
 # Tools to ensure code quality, run automated tests, and enforce static typing.
 pytest
 mypy
+
+fastapi
+uvicorn
+python-dotenv
