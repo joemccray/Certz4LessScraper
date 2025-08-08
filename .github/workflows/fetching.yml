@@ -1,32 +1,21 @@
-name: Run Scraper
+name: Daily Run Scraper
 
 on:
-  push:
-    branches: [ main ]
   schedule:
-    - cron: '0 2 * * *'  # runs daily at 2 AM UTC (adjust as needed)
+    - cron: '0 0 * * *'  # Every day at 12AM UTC
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'  # or any version you need
-
-      - name: Set up virtual environment
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run updated_exam_scraper.py
-        run: |
-          source venv/bin/activate
-          python updated_exam_scraper.py
+    - name: Run scraper on droplet
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.DO_HOST }}
+        username: root
+        key: ${{ secrets.DO_SSH_KEY }}
+        script: |
+          cd /root/Certz4LessScraper
+          python3 updated_exam_scraper.py
