@@ -27,17 +27,16 @@ from psycopg2.extras import execute_values
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Dict, Any
-
+from collections import Counter
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import ValidationError
+
 load_dotenv()
 
 # --- Modular Imports ---
 from vendors import WORKER_MAP, DISCOVERY_MAP
-from utils import (
-    setup_logging, send_notification, Question,
-    get_task_lists, save_state
-)
+from utils import setup_logging, send_notification, Question, get_task_lists, save_state
 from config_schema import ConfigSchema
 
 # --- Global State ---
@@ -50,6 +49,7 @@ main_logger = logging.getLogger("main")
 DATABASE_URL = os.getenv("DATABASE_URL")
 db_connection = None
 
+
 # ---------------------------
 # DB Connection
 # ---------------------------
@@ -57,7 +57,7 @@ def get_db_connection():
     global db_connection
     if db_connection is None or db_connection.closed:
         try:
-            main_logger.info(f'===== the database url is {DATABASE_URL} =====')
+            main_logger.info(f"===== the database url is {DATABASE_URL} =====")
             db_connection = psycopg2.connect(DATABASE_URL)
             db_connection.autocommit = True
             main_logger.info("✅ Connected to Postgres database successfully.")
@@ -65,6 +65,7 @@ def get_db_connection():
             main_logger.critical(f"❌ Could not connect to Postgres DB: {e}")
             sys.exit(1)
     return db_connection
+
 
 # ---------------------------
 # Create Table if not exists
@@ -75,7 +76,8 @@ def init_db():
         cursor = conn.cursor()
 
         # Create questions table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS questions (
             question_id TEXT PRIMARY KEY,
             vendor TEXT NOT NULL,
@@ -88,10 +90,12 @@ def init_db():
             source_type TEXT,
             version TEXT
         );
-        """)
+        """
+        )
 
         # Create answers table
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS answers (
             id SERIAL PRIMARY KEY,
             question_id TEXT REFERENCES questions(question_id) ON DELETE CASCADE,
@@ -99,26 +103,36 @@ def init_db():
             text TEXT NOT NULL,
             is_correct BOOLEAN DEFAULT FALSE
         );
-        """)
-        
-        cursor.execute("""
+        """
+        )
+
+        cursor.execute(
+            """
         CREATE INDEX IF NOT EXISTS idx_questions_vendor ON questions(vendor);
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE INDEX IF NOT EXISTS idx_questions_exam_code ON questions(exam_code);
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
-        """)
+        """
+        )
 
         conn.commit()
         cursor.close()
-        main_logger.info("✅ Tables 'questions' and 'answers' are ready in the database.")
+        main_logger.info(
+            "✅ Tables 'questions' and 'answers' are ready in the database."
+        )
     except Exception as e:
         main_logger.critical(f"❌ Failed to initialize DB table: {e}")
         sys.exit(1)
+
 
 # ---------------------------
 # Insert Batch of MCQs
@@ -136,33 +150,31 @@ async def validate_and_upsert_batch(records: List[Dict]):
             q = Question(**rec)
 
             # Prepare question record
-            valid_questions.append((
-                q.question_id,
-                q.vendor,
-                q.exam_code,
-                q.exam_name,
-                q.question_text,
-                q.explanation,
-                q.tags,
-                q.source_url,
-                q.source_type,
-                q.version
-            ))
+            valid_questions.append(
+                (
+                    q.question_id,
+                    q.vendor,
+                    q.exam_code,
+                    q.exam_name,
+                    q.question_text,
+                    q.explanation,
+                    q.tags,
+                    q.source_url,
+                    q.source_type,
+                    q.version,
+                )
+            )
 
             # Prepare associated answers
             for ans in q.answers:
-                valid_answers.append((
-                    q.question_id,
-                    ans.option,
-                    ans.text,
-                    ans.is_correct
-                ))
+                valid_answers.append(
+                    (q.question_id, ans.option, ans.text, ans.is_correct)
+                )
 
         except ValidationError as e:
-            validation_errors.append({
-                "record_id": rec.get("question_id"),
-                "error": e.errors()
-            })
+            validation_errors.append(
+                {"record_id": rec.get("question_id"), "error": e.errors()}
+            )
 
     if validation_errors:
         main_logger.warning(f"{len(validation_errors)} records failed validation.")
@@ -194,7 +206,9 @@ async def validate_and_upsert_batch(records: List[Dict]):
 
         cursor.close()
 
-        main_logger.info(f"[DB-ENTRY] ✅ Inserted {len(valid_questions)} questions and {len(valid_answers)} answers.")
+        main_logger.info(
+            f"[DB-ENTRY] ✅ Inserted {len(valid_questions)} questions and {len(valid_answers)} answers."
+        )
         return len(valid_questions)
 
     except Exception as e:
@@ -216,6 +230,7 @@ def load_config():
         main_logger.critical(f"❌ Failed to load and validate config.yaml: {e}")
         sys.exit(1)
 
+
 # ---------------------------
 # Signal Handler
 # ---------------------------
@@ -224,6 +239,7 @@ def handle_signal(sig, frame):
     if not terminate:
         main_logger.warning("SIGINT caught! Graceful shutdown initiated...")
         terminate = True
+
 
 # ---------------------------
 # Pre-flight checks
@@ -242,15 +258,58 @@ async def run_preflight_checks() -> bool:
     main_logger.info("✅ Pre-flight checks passed!")
     return True
 
+
+def summarize_vendors(tasks: List[Dict[str, Any]]) -> Dict[str, int]:
+    counts = Counter((t.get("vendor") or "Unknown").strip() for t in tasks)
+    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower())))
+
+def log_vendor_summary(counts: Dict[str, int]):
+    if not counts:
+        main_logger.info("No vendors discovered.")
+        return
+    total = sum(counts.values())
+    unique = len(counts)
+    main_logger.info("📦 Vendors discovered: %d unique across %d tasks.", unique, total)
+
+    # Pretty log table
+    width_vendor = max(6, max(len(v) for v in counts.keys()))
+    main_logger.info("+" + "-"*(width_vendor+2) + "+--------+")
+    main_logger.info("| %-*s | Count |", width_vendor, "Vendor")
+    main_logger.info("+" + "-"*(width_vendor+2) + "+--------+")
+    for vendor, cnt in counts.items():
+        main_logger.info("| %-*s | %5d |", width_vendor, vendor, cnt)
+    main_logger.info("+" + "-"*(width_vendor+2) + "+--------+")
+
+def dump_vendor_summary(counts: Dict[str, int], path: str = "vendors_discovered.json"):
+    try:
+        Path(path).write_text(json.dumps(counts, indent=2))
+        main_logger.info("💾 Wrote vendor summary to %s", path)
+    except Exception as e:
+        main_logger.warning("Could not write vendor summary to %s: %s", path, e)
+
 # ---------------------------
 # Main Async Task
 # ---------------------------
 async def main():
     parser = argparse.ArgumentParser(description="Exam Scraper v9.1 - Postgres Edition")
-    parser.add_argument("--sites", nargs='+', choices=['itexams', 'allfreedumps'],
-                        default=['itexams', 'allfreedumps'], help="Run crawlers for specified sites.")
-    parser.add_argument("--vendor", type=str, help="Target a specific vendor (e.g., 'Amazon').")
-    parser.add_argument("--save-pdfs", action="store_true", help="Archive all downloaded PDFs.")
+    parser.add_argument(
+        "--list-vendors",
+        action="store_true",
+        help="Discover tasks, print vendors found (with counts), then exit.",
+    )
+    parser.add_argument(
+        "--sites",
+        nargs="+",
+        choices=["itexams", "allfreedumps"],
+        default=["itexams", "allfreedumps"],
+        help="Run crawlers for specified sites.",
+    )
+    parser.add_argument(
+        "--vendor", type=str, help="Target a specific vendor (e.g., 'Amazon')."
+    )
+    parser.add_argument(
+        "--save-pdfs", action="store_true", help="Archive all downloaded PDFs."
+    )
     args = parser.parse_args()
 
     load_config()
@@ -262,11 +321,13 @@ async def main():
 
     whitelist, blacklist = get_task_lists()
 
-    async with httpx.AsyncClient(timeout=CONFIG['request_timeout']) as client:
+    async with httpx.AsyncClient(timeout=CONFIG["request_timeout"]) as client:
         discovery_coroutines = [
             DISCOVERY_MAP[site](client, CONFIG) for site in args.sites
         ]
-        task_results = await asyncio.gather(*discovery_coroutines, return_exceptions=True)
+        task_results = await asyncio.gather(
+            *discovery_coroutines, return_exceptions=True
+        )
 
     all_tasks = []
     for res in task_results:
@@ -276,34 +337,51 @@ async def main():
             main_logger.error(f"Task discovery failed: {res}")
 
     if args.vendor:
-        all_tasks = [t for t in all_tasks if t.get('vendor', '').lower() == args.vendor.lower()]
+        all_tasks = [
+            t for t in all_tasks if t.get("vendor", "").lower() == args.vendor.lower()
+        ]
     if whitelist:
-        all_tasks = [t for t in all_tasks if t['exam_code'] in whitelist]
+        all_tasks = [t for t in all_tasks if t["exam_code"] in whitelist]
     if blacklist:
-        all_tasks = [t for t in all_tasks if t['exam_code'] not in blacklist]
+        all_tasks = [t for t in all_tasks if t["exam_code"] not in blacklist]
 
     main_logger.info(f"Discovered {len(all_tasks)} tasks to process.")
+    vendor_counts = summarize_vendors(all_tasks)
+    log_vendor_summary(vendor_counts)
+    dump_vendor_summary(vendor_counts)
+
+    # If the user only wants to list vendors, stop here
+    if args.list_vendors:
+        return
+    
     if not all_tasks:
         return
 
     metrics = {
-        "start_time": time.time(), "total_tasks": len(all_tasks),
-        "processed_tasks": 0, "questions_found": 0, "errors": 0,
-        "vendor_counts": {}
+        "start_time": time.time(),
+        "total_tasks": len(all_tasks),
+        "processed_tasks": 0,
+        "questions_found": 0,
+        "errors": 0,
+        "vendor_counts": {},
     }
 
-    with ProcessPoolExecutor(max_workers=CONFIG['max_cpu_workers']) as process_pool:
-        async with httpx.AsyncClient(timeout=CONFIG['request_timeout']) as client:
+    with ProcessPoolExecutor(max_workers=CONFIG["max_cpu_workers"]) as process_pool:
+        async with httpx.AsyncClient(timeout=CONFIG["request_timeout"]) as client:
             # Create a semaphore to limit concurrent requests
-            semaphore = asyncio.Semaphore(CONFIG.get('max_concurrent_requests', 10))
+            semaphore = asyncio.Semaphore(CONFIG.get("max_concurrent_requests", 10))
             worker_tasks = []
             for task in all_tasks:
-                worker_func = WORKER_MAP.get(task['site'])
+                worker_func = WORKER_MAP.get(task["site"])
                 if worker_func:
                     coro = worker_func(
-                        client=client, task=task, logger=logging.getLogger(task['site']),
-                        process_pool=process_pool, config=CONFIG,
-                        save_pdfs=args.save_pdfs, semaphore=semaphore
+                        client=client,
+                        task=task,
+                        logger=logging.getLogger(task["site"]),
+                        process_pool=process_pool,
+                        config=CONFIG,
+                        save_pdfs=args.save_pdfs,
+                        semaphore=semaphore,
                     )
                     worker_tasks.append(asyncio.create_task(coro))
 
@@ -320,9 +398,11 @@ async def main():
                     metrics["processed_tasks"] += 1
 
     metrics["end_time"] = time.time()
+    metrics["vendor_counts"] = vendor_counts
     metrics["duration_seconds"] = metrics["end_time"] - metrics["start_time"]
     save_state(checkpoint, metrics, {}, False)
     main_logger.info(f"Scrape finished. Report: {json.dumps(metrics, indent=2)}")
+
 
 if __name__ == "__main__":
     try:

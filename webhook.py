@@ -10,12 +10,15 @@ app = FastAPI()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
+
 
 @app.get("/")
 def root():
     return {"message": "Certz4Less Webhook API is online 🚀"}
+
 
 @app.get("/questions")
 def list_questions(vendor: Optional[str] = Query(None)):
@@ -35,10 +38,11 @@ def list_questions(vendor: Optional[str] = Query(None)):
 
         cur.close()
         conn.close()
-        return {"counts":len(results),"questions": results}
+        return {"counts": len(results), "questions": results}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/questions/{question_id}")
 def get_question(question_id: str):

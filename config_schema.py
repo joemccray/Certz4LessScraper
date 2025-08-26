@@ -2,6 +2,7 @@
 from pydantic import BaseModel, Field
 from typing import Dict
 
+
 class Selectors(BaseModel):
     question_container: str
     question_body: str
@@ -9,9 +10,11 @@ class Selectors(BaseModel):
     answer_option: str
     next_page_link: str
 
+
 class SiteSelectors(BaseModel):
     itexams: Selectors
     allfreedumps: Dict[str, str]
+
 
 class ConfigSchema(BaseModel):
     max_concurrent_requests: int = 10
