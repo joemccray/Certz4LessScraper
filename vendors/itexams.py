@@ -145,9 +145,8 @@ async def discover_itexams_tasks(client: httpx.AsyncClient, config: Dict) -> Lis
                 "source_site": "itexams.com",
             }
         )
-        
-    logger.info(f"======= tasks list ====== {tasks}")
-    logger.info(
+    
+        logger.info(
         f"✅ Discovered {len(tasks)} potential tasks from the itexams.com master index."
     )
     return tasks
