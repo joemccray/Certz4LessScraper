@@ -10,35 +10,59 @@ app = FastAPI()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
+
 
 @app.get("/")
 def root():
     return {"message": "Certz4Less Webhook API is online 🚀"}
 
+
 @app.get("/questions")
 def list_questions(vendor: Optional[str] = Query(None)):
     try:
         conn = get_connection()
-        cur = conn.cursor()
 
-        if vendor:
-            cur.execute("SELECT * FROM questions WHERE vendor = %s", (vendor,))
-        else:
-            cur.execute("SELECT * FROM questions")
+        # 1) Fetch questions
+        with conn.cursor() as cur:
+            if vendor:
+                cur.execute("SELECT * FROM questions WHERE vendor = %s", (vendor,))
+            else:
+                cur.execute("SELECT * FROM questions")
 
-        rows = cur.fetchall()
-        colnames = [desc[0] for desc in cur.description]
+            q_rows = cur.fetchall()
+            q_colnames = [desc[0] for desc in cur.description]
 
-        results = [dict(zip(colnames, row)) for row in rows]
+        questions = [dict(zip(q_colnames, row)) for row in q_rows]
 
-        cur.close()
+        # 2) For each question, fetch answers and attach (dedup + order)
+        with conn.cursor() as cur_ans:
+            for q in questions:
+                qid = q["question_id"]
+                cur_ans.execute(
+                    """
+                    SELECT DISTINCT option, text, is_correct
+                    FROM answers
+                    WHERE question_id = %s
+                    ORDER BY option
+                    """,
+                    (qid,),
+                )
+                ans_rows = cur_ans.fetchall()
+                q["answers"] = [
+                    {"option": opt, "text": txt, "is_correct": is_c}
+                    for (opt, txt, is_c) in ans_rows
+                ]
+
         conn.close()
-        return {"counts":len(results),"questions": results}
+        return {"counts": len(questions), "questions": questions}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.get("/questions/{question_id}")
 def get_question(question_id: str):
@@ -66,7 +90,10 @@ def get_answers(question_id: str):
         conn = get_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT * FROM answers WHERE question_id = %s", (question_id,))
+        cur.execute(
+            "SELECT option, text, is_correct FROM answers WHERE question_id = %s ORDER BY option",
+            (question_id,)
+        )
         rows = cur.fetchall()
 
         if not rows:

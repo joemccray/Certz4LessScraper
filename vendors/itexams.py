@@ -102,6 +102,8 @@ async def discover_itexams_tasks(client: httpx.AsyncClient, config: Dict) -> Lis
         logger.info(f"====== exam code  {exam_code}")
         exam_name = exam_data.get("exam_name", "")
         logger.info(f"===== exam name {exam_name}")
+        vendor_name = exam_data.get('vendor', '')
+        logger.info(f"===== vendor name {vendor_name}")
         if not vendor or vendor == "Unknown" or not exam_code or not exam_name:
             logger.warning(f"⚠️ Incomplete metadata found on {info_res.url}. Skipping.")
             continue
@@ -110,7 +112,7 @@ async def discover_itexams_tasks(client: httpx.AsyncClient, config: Dict) -> Lis
             "site": "itexams",
             "info_url": str(info_res.url),
             "exam_code": exam_code,
-            "vendor": name,
+            "vendor": vendor_name,
             "exam_name": exam_name,
             "version": "latest",
             "source_site": "itexams.com"
